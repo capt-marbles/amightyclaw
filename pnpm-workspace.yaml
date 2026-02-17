@@ -1,0 +1,8 @@
+packages:
+  - packages/*
+  - ui/*
+
+onlyBuiltDependencies:
+  - bcrypt
+  - better-sqlite3
+  - esbuild

@@ -1,0 +1,11 @@
+services:
+  amightyclaw:
+    build: .
+    ports:
+      - "3333:3333"
+    volumes:
+      - amightyclaw-data:/root/.amightyclaw
+    restart: unless-stopped
+
+volumes:
+  amightyclaw-data:

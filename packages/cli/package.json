@@ -1,0 +1,26 @@
+{
+  "name": "@amightyclaw/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "amightyclaw": "./dist/cli.js"
+  },
+  "main": "dist/cli.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "dependencies": {
+    "@amightyclaw/core": "workspace:*",
+    "@amightyclaw/gateway": "workspace:*",
+    "@amightyclaw/scheduler": "workspace:*",
+    "bcrypt": "^5.1.1",
+    "commander": "^13.0.0",
+    "inquirer": "^12.3.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
