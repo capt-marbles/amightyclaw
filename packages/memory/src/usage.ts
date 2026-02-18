@@ -1,12 +1,14 @@
 import { getDatabase } from './database.js';
 
 export class UsageStore {
-  record(profile: string, promptTokens: number, completionTokens: number): void {
+  record(profile: string, promptTokens: number | null | undefined, completionTokens: number | null | undefined): void {
     const db = getDatabase();
     const date = new Date().toISOString().slice(0, 10);
+    const pt = promptTokens ?? 0;
+    const ct = completionTokens ?? 0;
     db.prepare(
       'INSERT INTO usage (profile, date, prompt_tokens, completion_tokens, total_tokens) VALUES (?, ?, ?, ?, ?)'
-    ).run(profile, date, promptTokens, completionTokens, promptTokens + completionTokens);
+    ).run(profile, date, pt, ct, pt + ct);
   }
 
   getDailyUsage(profile: string, date?: string): number {

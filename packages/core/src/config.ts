@@ -10,6 +10,10 @@ const ProfileSchema = z.object({
   apiKey: z.string().min(1),
   maxTokensPerMessage: z.number().int().positive().default(4096),
   maxTokensPerDay: z.number().int().positive().default(100000),
+  temperature: z.number().min(0).max(2).optional(),
+  topP: z.number().min(0).max(1).optional(),
+  systemPromptOverride: z.string().optional(),
+  maxHistoryMessages: z.number().int().positive().optional(),
 });
 
 const ConfigSchema = z.object({
@@ -24,6 +28,10 @@ const ConfigSchema = z.object({
   ),
   dataDir: z.string().default(''),
   logLevel: z.string().default('info'),
+  braveApiKey: z.string().optional(),
+  maxExecutionTimeout: z.number().int().positive().default(30000),
+  commandDenyList: z.array(z.string()).optional(),
+  telegram: z.object({ botToken: z.string().min(1) }).optional(),
 });
 
 export function getDataDir(): string {

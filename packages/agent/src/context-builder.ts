@@ -16,12 +16,17 @@ export class ContextBuilder {
   async build(
     conversationId: string,
     userMessage: string,
-    historyLimit = 20
+    historyLimit = 20,
+    systemPromptOverride?: string
   ): Promise<Array<{ role: 'user' | 'assistant' | 'system'; content: string }>> {
     const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
 
-    // System prompt from Soul.MD
-    let systemPrompt = this.soul.getContent();
+    // System prompt: optional override prepended to Soul.MD content
+    let systemPrompt = '';
+    if (systemPromptOverride) {
+      systemPrompt = systemPromptOverride + '\n\n';
+    }
+    systemPrompt += this.soul.getContent();
 
     // Retrieve relevant facts
     const relevantFacts = this.facts.searchHybrid(userMessage, 5);

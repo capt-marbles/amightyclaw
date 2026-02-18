@@ -34,6 +34,11 @@ export class FactStore {
   }
 
   searchFTS(query: string, limit = 10): Fact[] {
+    // Sanitize query for FTS5: extract alphanumeric words, join with OR
+    const words = query.replace(/[^\w\s]/g, '').split(/\s+/).filter((w) => w.length > 1);
+    if (words.length === 0) return [];
+
+    const ftsQuery = words.map((w) => `"${w}"`).join(' OR ');
     const db = getDatabase();
     const rows = db.prepare(
       `SELECT f.* FROM facts f
@@ -41,7 +46,7 @@ export class FactStore {
        WHERE facts_fts MATCH ?
        ORDER BY rank
        LIMIT ?`
-    ).all(query, limit) as Array<Record<string, string>>;
+    ).all(ftsQuery, limit) as Array<Record<string, string>>;
     return rows.map(this.mapRow);
   }
 

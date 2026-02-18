@@ -61,6 +61,25 @@ export class ConversationStore {
     return { id, ...msg, createdAt: now };
   }
 
+  searchMessages(query: string, limit = 20): Array<{ conversationId: string; title: string; snippet: string; createdAt: string }> {
+    const db = getDatabase();
+    const rows = db.prepare(`
+      SELECT m.conversation_id, c.title, snippet(messages_fts, 0, '<b>', '</b>', '...', 32) as snippet, m.created_at
+      FROM messages_fts
+      JOIN messages m ON m.rowid = messages_fts.rowid
+      JOIN conversations c ON c.id = m.conversation_id
+      WHERE messages_fts MATCH ?
+      ORDER BY rank
+      LIMIT ?
+    `).all(query, limit) as Array<Record<string, string>>;
+    return rows.map((r) => ({
+      conversationId: r.conversation_id,
+      title: r.title,
+      snippet: r.snippet,
+      createdAt: r.created_at,
+    }));
+  }
+
   getMessages(conversationId: string, limit = 100): Message[] {
     const db = getDatabase();
     const rows = db.prepare(

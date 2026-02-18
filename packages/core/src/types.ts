@@ -30,6 +30,10 @@ export interface ProfileConfig {
   apiKey: string;
   maxTokensPerMessage: number;
   maxTokensPerDay: number;
+  temperature?: number;
+  topP?: number;
+  systemPromptOverride?: string;
+  maxHistoryMessages?: number;
 }
 
 export type ProviderType = 'openai' | 'anthropic' | 'google' | 'mistral' | 'ollama';
@@ -43,6 +47,10 @@ export interface AppConfig {
   profiles: Record<string, ProfileConfig>;
   dataDir: string;
   logLevel: string;
+  braveApiKey?: string;
+  maxExecutionTimeout?: number;
+  commandDenyList?: string[];
+  telegram?: { botToken: string };
 }
 
 export interface UsageRecord {

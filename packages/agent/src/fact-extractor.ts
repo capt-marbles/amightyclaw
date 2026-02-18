@@ -39,7 +39,7 @@ export class FactExtractor {
       ];
 
       let fullText = '';
-      for await (const chunk of this.providers.streamChat(this.extractionProfile, messages, 500)) {
+      for await (const chunk of this.providers.streamChat(this.extractionProfile, messages, { maxTokens: 500 })) {
         if (chunk.type === 'text' && chunk.text) {
           fullText += chunk.text;
         }

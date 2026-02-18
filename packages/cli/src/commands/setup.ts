@@ -31,13 +31,16 @@ export async function setupCommand(): Promise<void> {
     }
   }
 
-  const answers = await inquirer.prompt([
+  const { port } = await inquirer.prompt([
     {
       type: 'number',
       name: 'port',
       message: 'Server port:',
       default: 3333,
     },
+  ]);
+
+  const { password } = await inquirer.prompt([
     {
       type: 'password',
       name: 'password',
@@ -45,15 +48,20 @@ export async function setupCommand(): Promise<void> {
       mask: '*',
       validate: (v: string) => v.length >= 8 || 'Password must be at least 8 characters',
     },
+  ]);
+
+  await inquirer.prompt([
     {
       type: 'password',
       name: 'passwordConfirm',
       message: 'Confirm password:',
       mask: '*',
-      validate: (v: string, a: Record<string, string>) =>
-        v === a.password || 'Passwords do not match',
+      validate: (v: string) =>
+        v === password || 'Passwords do not match',
     },
   ]);
+
+  const answers = { port, password };
 
   const profiles: Record<string, unknown> = {};
   const encryptionKey = generateSecret(32);

@@ -4,6 +4,9 @@ import { MessageBubble } from './MessageBubble.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { ProfileSwitcher } from './ProfileSwitcher.js';
 import { Sidebar } from './Sidebar.js';
+import { ToolActivity } from './ToolActivity.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
+import { SettingsDrawer } from './SettingsDrawer.js';
 
 interface Message {
   id: string;
@@ -24,6 +27,18 @@ interface Profile {
   model: string;
 }
 
+interface ToolEvent {
+  toolCallId: string;
+  toolName: string;
+  args?: Record<string, unknown>;
+  result?: string;
+}
+
+interface ConfirmRequest {
+  toolCallId: string;
+  command: string;
+}
+
 interface Props {
   token: string;
   onLogout: () => void;
@@ -38,6 +53,9 @@ export function ChatWindow({ token, onLogout }: Props) {
   const [currentProfile, setCurrentProfile] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
+  const [toolEvents, setToolEvents] = useState<ToolEvent[]>([]);
+  const [confirmRequests, setConfirmRequests] = useState<ConfirmRequest[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,7 +71,6 @@ export function ChatWindow({ token, onLogout }: Props) {
     const socket = getSocket(token);
 
     socket.on('connect', () => {
-      // Load profiles
       socket.emit('profile:list', (profs: Profile[]) => {
         setProfiles(profs);
         if (profs.length > 0 && !currentProfile) {
@@ -61,7 +78,6 @@ export function ChatWindow({ token, onLogout }: Props) {
         }
       });
 
-      // Load conversations
       socket.emit('conversation:list', (convs: Conversation[]) => {
         setConversations(convs);
       });
@@ -79,11 +95,35 @@ export function ChatWindow({ token, onLogout }: Props) {
     socket.on('message:complete', (msg: Message) => {
       setStreamText('');
       setMessages((prev) => [...prev, msg]);
+      setToolEvents([]);
     });
 
     socket.on('conversation:created', (conv: Conversation) => {
       setCurrentConvId(conv.id);
       setConversations((prev) => [conv, ...prev]);
+    });
+
+    // Tool events
+    socket.on('tool:call', (data: { toolCallId: string; toolName: string; args: Record<string, unknown> }) => {
+      setToolEvents((prev) => [...prev, { toolCallId: data.toolCallId, toolName: data.toolName, args: data.args }]);
+    });
+
+    socket.on('tool:result', (data: { toolCallId: string; toolName: string; result: string }) => {
+      setToolEvents((prev) =>
+        prev.map((e) => e.toolCallId === data.toolCallId ? { ...e, result: data.result } : e)
+      );
+    });
+
+    // Confirmation requests
+    socket.on('tool:confirm-request', (data: { toolCallId: string; command: string }) => {
+      setConfirmRequests((prev) => [...prev, data]);
+    });
+
+    // Title updates
+    socket.on('conversation:title-updated', (data: { conversationId: string; title: string }) => {
+      setConversations((prev) =>
+        prev.map((c) => c.id === data.conversationId ? { ...c, title: data.title } : c)
+      );
     });
 
     socket.on('connect_error', (err) => {
@@ -97,6 +137,10 @@ export function ChatWindow({ token, onLogout }: Props) {
       socket.off('message:stream:end');
       socket.off('message:complete');
       socket.off('conversation:created');
+      socket.off('tool:call');
+      socket.off('tool:result');
+      socket.off('tool:confirm-request');
+      socket.off('conversation:title-updated');
       socket.off('connect_error');
     };
   }, [token, onLogout, currentProfile]);
@@ -114,6 +158,7 @@ export function ChatWindow({ token, onLogout }: Props) {
 
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
+    setToolEvents([]);
     socket.emit('message:send', text);
     inputRef.current?.focus();
   }, [input, streaming, token]);
@@ -140,6 +185,7 @@ export function ChatWindow({ token, onLogout }: Props) {
       if ('error' in data) return;
       setCurrentConvId(id);
       setMessages(data.messages);
+      setToolEvents([]);
     });
   }, [token]);
 
@@ -150,6 +196,12 @@ export function ChatWindow({ token, onLogout }: Props) {
     });
   }, [token]);
 
+  const handleConfirmResponse = useCallback((toolCallId: string, approved: boolean) => {
+    const socket = getSocket(token);
+    socket.emit('tool:confirm-response', { toolCallId, approved });
+    setConfirmRequests((prev) => prev.filter((r) => r.toolCallId !== toolCallId));
+  }, [token]);
+
   return (
     <div className="h-screen flex bg-gray-950">
       <Sidebar
@@ -157,6 +209,7 @@ export function ChatWindow({ token, onLogout }: Props) {
         currentId={currentConvId}
         onSelect={handleSelectConversation}
         onNew={handleNewChat}
+        token={token}
       />
 
       <div className="flex-1 flex flex-col">
@@ -170,12 +223,21 @@ export function ChatWindow({ token, onLogout }: Props) {
               onChange={handleProfileChange}
             />
           </div>
-          <button
-            onClick={onLogout}
-            className="text-gray-400 hover:text-gray-200 text-sm transition-colors"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              className="text-gray-400 hover:text-gray-200 text-sm transition-colors"
+              title="Settings"
+            >
+              &#9881;
+            </button>
+            <button
+              onClick={onLogout}
+              className="text-gray-400 hover:text-gray-200 text-sm transition-colors"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -183,7 +245,7 @@ export function ChatWindow({ token, onLogout }: Props) {
           {messages.length === 0 && !streaming && (
             <div className="h-full flex items-center justify-center">
               <div className="text-center text-gray-500">
-                <p className="text-4xl mb-4">🐾</p>
+                <p className="text-4xl mb-4">&#128062;</p>
                 <p className="text-lg font-medium">Start a conversation</p>
                 <p className="text-sm mt-1">Type a message below to begin</p>
               </div>
@@ -196,6 +258,19 @@ export function ChatWindow({ token, onLogout }: Props) {
               role={msg.role}
               content={msg.content}
               profile={msg.profile}
+            />
+          ))}
+
+          {/* Tool activity for current streaming response */}
+          {toolEvents.length > 0 && <ToolActivity events={toolEvents} />}
+
+          {/* Confirmation dialogs */}
+          {confirmRequests.map((req) => (
+            <ConfirmDialog
+              key={req.toolCallId}
+              toolCallId={req.toolCallId}
+              command={req.command}
+              onRespond={handleConfirmResponse}
             />
           ))}
 
@@ -232,6 +307,8 @@ export function ChatWindow({ token, onLogout }: Props) {
           </div>
         </div>
       </div>
+
+      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} token={token} />
     </div>
   );
 }

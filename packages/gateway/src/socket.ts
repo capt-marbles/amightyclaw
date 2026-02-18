@@ -3,7 +3,7 @@ import type { Server as HTTPServer } from 'node:http';
 import { v4 as uuid } from 'uuid';
 import type { AppConfig, BusMessage } from '@amightyclaw/core';
 import { getLogger } from '@amightyclaw/core';
-import { MessageBus } from '@amightyclaw/agent';
+import { MessageBus, AgentLoop } from '@amightyclaw/agent';
 import { ConversationStore } from '@amightyclaw/memory';
 import { verifyToken } from './auth.js';
 
@@ -13,7 +13,8 @@ export function createSocketServer(
   httpServer: HTTPServer,
   config: AppConfig,
   bus: MessageBus,
-  conversations: ConversationStore
+  conversations: ConversationStore,
+  agentLoop: AgentLoop
 ): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -83,11 +84,19 @@ export function createSocketServer(
 
     // Chat
     socket.on('message:send', (content: string) => {
+      log.info({ profile: currentProfile, conversationId: currentConversationId, contentLength: content?.length }, 'Message received from client');
+
+      if (!content || typeof content !== 'string') {
+        log.warn('Empty or invalid message received');
+        return;
+      }
+
       if (!currentConversationId) {
         const conv = conversations.create();
         currentConversationId = conv.id;
         socket.join(conv.id);
         socket.emit('conversation:created', conv);
+        log.info({ conversationId: conv.id }, 'Auto-created conversation');
       }
 
       const msg: BusMessage = {
@@ -103,12 +112,18 @@ export function createSocketServer(
       bus.publish(msg);
     });
 
+    // Tool execution confirmation response from client
+    socket.on('tool:confirm-response', (data: { toolCallId: string; approved: boolean }) => {
+      log.info({ toolCallId: data.toolCallId, approved: data.approved }, 'Confirmation response');
+      agentLoop.confirmCommand(data.toolCallId, data.approved);
+    });
+
     socket.on('disconnect', () => {
       log.info({ id: socket.id }, 'Client disconnected');
     });
   });
 
-  // Forward stream events to Socket.IO
+  // Forward stream events to Socket.IO (webchat channel only)
   bus.on('stream', (data: { conversationId: string; chunk: string }) => {
     io.to(data.conversationId).emit('message:stream', data.chunk);
   });
@@ -118,7 +133,7 @@ export function createSocketServer(
   });
 
   bus.on('message', (msg: BusMessage) => {
-    if (msg.role === 'assistant') {
+    if (msg.role === 'assistant' && msg.channel === 'webchat') {
       io.to(msg.conversationId).emit('message:complete', {
         id: msg.id,
         role: msg.role,
@@ -127,6 +142,47 @@ export function createSocketServer(
         timestamp: msg.timestamp,
       });
     }
+  });
+
+  // Forward tool events
+  bus.on('tool:call', (data: { conversationId: string; channel: string; toolCallId: string; toolName: string; args: unknown }) => {
+    if (data.channel === 'webchat') {
+      io.to(data.conversationId).emit('tool:call', {
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
+        args: data.args,
+      });
+    }
+  });
+
+  bus.on('tool:result', (data: { conversationId: string; channel: string; toolCallId: string; toolName: string; result: string }) => {
+    if (data.channel === 'webchat') {
+      io.to(data.conversationId).emit('tool:result', {
+        toolCallId: data.toolCallId,
+        toolName: data.toolName,
+        result: data.result,
+      });
+    }
+  });
+
+  // Forward confirmation requests
+  bus.on('tool:confirm-request', (data: { conversationId: string; channel: string; toolCallId: string; command: string }) => {
+    if (data.channel === 'webchat') {
+      io.to(data.conversationId).emit('tool:confirm-request', {
+        toolCallId: data.toolCallId,
+        command: data.command,
+      });
+    }
+  });
+
+  // Forward conversation title updates
+  bus.on('conversation:title-updated', (data: { conversationId: string; title: string }) => {
+    io.to(data.conversationId).emit('conversation:title-updated', { conversationId: data.conversationId, title: data.title });
+  });
+
+  // Handle Telegram confirmation responses (forwarded from TelegramChannel)
+  bus.on('tool:confirm-response:telegram', (data: { toolCallId: string; approved: boolean }) => {
+    agentLoop.confirmCommand(data.toolCallId, data.approved);
   });
 
   return io;

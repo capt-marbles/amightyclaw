@@ -90,6 +90,23 @@ export class SchedulerService {
     }));
   }
 
+  async toggleJob(name: string, enabled: boolean): Promise<void> {
+    const db = getDatabase();
+    db.prepare('UPDATE cron_jobs SET enabled = ? WHERE name = ?').run(enabled ? 1 : 0, name);
+
+    const task = this.tasks.get(name);
+    if (enabled && !task) {
+      // Re-schedule if enabling
+      const row = db.prepare('SELECT * FROM cron_jobs WHERE name = ?').get(name) as Record<string, unknown> | undefined;
+      if (row) this.scheduleJob(row as unknown as CronJob);
+    } else if (!enabled && task) {
+      task.stop();
+      this.tasks.delete(name);
+    }
+
+    log.info({ name, enabled }, 'Cron job toggled');
+  }
+
   private scheduleJob(job: CronJob): void {
     const task = cron.schedule(job.cron, async () => {
       log.info({ name: job.name }, 'Cron job triggered');
