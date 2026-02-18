@@ -32,6 +32,11 @@ const ConfigSchema = z.object({
   maxExecutionTimeout: z.number().int().positive().default(30000),
   commandDenyList: z.array(z.string()).optional(),
   telegram: z.object({ botToken: z.string().min(1) }).optional(),
+  phantomBuster: z.object({
+    apiKey: z.string().min(1),
+    tweetExtractorAgentId: z.string().optional(),
+    searchExportAgentId: z.string().optional(),
+  }).optional(),
 });
 
 export function getDataDir(): string {

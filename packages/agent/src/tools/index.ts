@@ -6,6 +6,8 @@ import { createWebSearchTool } from './web-search.js';
 import { createSkillTools } from './skills.js';
 import { createRunCommandTool } from './run-command.js';
 import { createReminderTools } from './reminders.js';
+import { createSocialIntelTools } from './social-intel.js';
+import { SocialPostStore } from '@amightyclaw/memory';
 
 // Context holder — updated per message by the agent loop
 let currentContext = { conversationId: '', channel: 'webchat', profile: '' };
@@ -50,4 +52,24 @@ export function registerBuiltinTools(
   registry.register('listReminders', listReminders);
   registry.register('removeReminder', removeReminder);
   registry.register('toggleReminder', toggleReminder);
+
+  // Social intelligence tools
+  const socialPostStore = new SocialPostStore();
+  const socialTools = createSocialIntelTools(socialPostStore, config);
+
+  // X/Twitter tools — conditional on PhantomBuster config
+  if (config.phantomBuster?.apiKey) {
+    if (config.phantomBuster.tweetExtractorAgentId) {
+      registry.register('xTrackAccount', socialTools.xTrackAccount);
+    }
+    if (config.phantomBuster.searchExportAgentId) {
+      registry.register('xSearchKeywords', socialTools.xSearchKeywords);
+    }
+    registry.register('queryTweets', socialTools.queryTweets);
+  }
+
+  // Reddit tools — always available, no auth needed
+  registry.register('redditSearch', socialTools.redditSearch);
+  registry.register('redditMonitor', socialTools.redditMonitor);
+  registry.register('queryRedditPosts', socialTools.queryRedditPosts);
 }

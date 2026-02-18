@@ -51,6 +51,11 @@ export interface AppConfig {
   maxExecutionTimeout?: number;
   commandDenyList?: string[];
   telegram?: { botToken: string };
+  phantomBuster?: {
+    apiKey: string;
+    tweetExtractorAgentId?: string;
+    searchExportAgentId?: string;
+  };
 }
 
 export interface UsageRecord {

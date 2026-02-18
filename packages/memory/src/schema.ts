@@ -85,4 +85,45 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
   next_run TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS social_posts (
+  id TEXT PRIMARY KEY,
+  platform TEXT NOT NULL CHECK (platform IN ('twitter', 'reddit')),
+  external_id TEXT NOT NULL,
+  author TEXT NOT NULL DEFAULT '',
+  content TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '',
+  subreddit TEXT,
+  title TEXT,
+  score INTEGER DEFAULT 0,
+  reply_count INTEGER DEFAULT 0,
+  repost_count INTEGER DEFAULT 0,
+  post_type TEXT NOT NULL DEFAULT 'tweet' CHECK (post_type IN ('tweet', 'article', 'thread')),
+  source_query TEXT NOT NULL DEFAULT '',
+  posted_at TEXT NOT NULL,
+  ingested_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_social_posts_platform_extid
+  ON social_posts(platform, external_id);
+CREATE INDEX IF NOT EXISTS idx_social_posts_platform ON social_posts(platform, ingested_at DESC);
+CREATE INDEX IF NOT EXISTS idx_social_posts_author ON social_posts(platform, author);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS social_posts_fts USING fts5(
+  content, title, author,
+  content=social_posts, content_rowid=rowid
+);
+
+CREATE TRIGGER IF NOT EXISTS social_posts_ai AFTER INSERT ON social_posts BEGIN
+  INSERT INTO social_posts_fts(rowid, content, title, author) VALUES (new.rowid, new.content, new.title, new.author);
+END;
+
+CREATE TRIGGER IF NOT EXISTS social_posts_ad AFTER DELETE ON social_posts BEGIN
+  INSERT INTO social_posts_fts(social_posts_fts, rowid, content, title, author) VALUES ('delete', old.rowid, old.content, old.title, old.author);
+END;
+
+CREATE TRIGGER IF NOT EXISTS social_posts_au AFTER UPDATE ON social_posts BEGIN
+  INSERT INTO social_posts_fts(social_posts_fts, rowid, content, title, author) VALUES ('delete', old.rowid, old.content, old.title, old.author);
+  INSERT INTO social_posts_fts(rowid, content, title, author) VALUES (new.rowid, new.content, new.title, new.author);
+END;
 `;
